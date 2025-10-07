@@ -1,0 +1,63 @@
+VARIÁVEL;DESCRIÇÃO;CATEGORIAS
+COD_UNICO_ENDERECO;Código único do endereço;
+COD_UF;Código da UF;
+COD_MUNICIPIO;Código do município;
+COD_DISTRITO;Código do distrito;
+COD_SUBDISTRITO;Código do subdistrito;
+COD_SETOR;Código do setor;
+NUM_QUADRA;Número da quadra ¹;
+NUM_FACE;Número da face;
+CEP;Código de Endereçamento Postal;
+DSC_LOCALIDADE;Localidade;
+NOM_TIPO_SEGLOGR;Tipo do logradouro;
+NOM_TITULO_SEGLOGR;Título do logradouro;
+NOM_SEGLOGR;Nome do logradouro;
+NUM_ENDERECO;Número no logradouro;
+DSC_MODIFICADOR;Modificador do número;
+NOM_COMP_ELEM1;Complemento: Elemento 1;
+VAL_COMP_ELEM1;Complemento: Valor 1;
+NOM_COMP_ELEM2;Complemento: Elemento 2;
+VAL_COMP_ELEM2;Complemento: Valor 2;
+NOM_COMP_ELEM3;Complemento: Elemento 3;
+VAL_COMP_ELEM3;Complemento: Valor 3;
+NOM_COMP_ELEM4;Complemento: Elemento 4;
+VAL_COMP_ELEM4;Complemento: Valor 4;
+NOM_COMP_ELEM5;Complemento: Elemento 5;
+VAL_COMP_ELEM5;Complemento: Valor 5;
+LATITUDE;Latitude do Endereço;
+LONGITUDE;Longitude do Endereço;
+NV_GEO_COORD;Nível de geocodificação;1=Endereço - coordenada original do Censo 2022
+;;2=Endereço - coordenada modificada (apartamentos em um mesmo número no logradouro) ²
+;;3=Endereço - coordenada estimada (endereços originalmente sem coordenadas ou coordenadas inválidas) ³
+;;4=Face de quadra
+;;5=Localidade
+;;6=Setor censitário
+COD_ESPECIE;Espécie de endereço;1=Domicílio particular
+;;2=Domicílio coletivo
+;;3=Estabelecimento agropecuário
+;;4=Estabelecimento de ensino
+;;5=Estabelecimento de saúde
+;;6=Estabelecimento de outras finalidades
+;;7=Edificação em construção ou reforma
+;;8=Estabelecimento religioso
+DSC_ESTABELECIMENTO;Identificação do estabelecimento;
+COD_INDICADOR_ESTAB_ENDERECO;Indicador de estabelecimento;1=Único
+;;2=Múltiplo, com até 10 estabelecimentos no endereço
+;;3=Múltiplo, com mais de 10 estabelecimentos no endereço
+;;4=Múltiplo, com quantidade de estabelecimentos desconhecida no endereço
+COD_INDICADOR_CONST_ENDERECO;Indicador de construção ou reforma;1=Único
+;;2=Múltiplo, com até 10 unidades no endereço
+;;3=Múltiplo, com mais de 10 unidades no endereço
+;;4=Múltiplo, com quantidade de unidades desconhecida no endereço
+COD_INDICADOR_FINALIDADE_CONST;Indicador de finalidade de construção;1=Residencial
+;;2=Não residencial
+;;3=Misto
+;;4=Indeterminado
+COD_TIPO_ESPECIE;Tipo da edificação dos domicílios;101=Casa
+;;102=Casa de vila ou em condomínio
+;;103=Apartamento
+;;104=Outros
+¹ Cada registro representa uma espécie existente no endereço.;;
+² O método utilizado para modificação de endereços de apartamentos em um mesmo número de logradouro está apresentado no documento metodológico da publicação.;;
+³ Os critérios de coordenadas inválidas estão apresentados no documento metodológico da publicação.;;
+;³ Endereços em áreas não urbanizadas possuem número de quadra = 0;
