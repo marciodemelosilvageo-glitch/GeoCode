@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoCode | Visualizador de Múltiplas Camadas</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        #map { height: 75vh; }
+        body { background-color: #f0f4f8; }
+        .leaflet-control-layers {
+            border-radius: 8px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            border: 1px solid #ccc;
+        }
+        #search-results-list, #selected-features-list, #layers-list {
+            max-height: 25vh;
+            overflow-y: auto;
+        }
+        /* Estilos para a legenda */
+        .info.legend {
+            line-height: 18px;
+            color: #555;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+        }
+        .info.legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center min-h-screen p-4 space-y-4">
+
+    <div class="w-full max-w-7xl bg-white rounded-2xl shadow-xl p-6 space-y-4">
+        <!-- Cabeçalho -->
+        <header class="flex flex-col sm:flex-row items-center justify-between gap-4 border-b pb-4">
+            <div class="text-center sm:text-left">
+                <img src="https://raw.githubusercontent.com/marciodemelosilvageo-glitch/GeoCode/main/logo/image-Photoroom.png" alt="Logo GeoCode" class="h-16">
+            </div>
+            <div class="w-full sm:w-auto flex flex-col items-end gap-2">
+                <div class="flex items-center self-end">
+                    <label for="search-active-layers-toggle" class="mr-3 text-sm font-medium text-gray-900">Pesquisar apenas nas camadas ativas</label>
+                    <input id="search-active-layers-toggle" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                </div>
+                <div class="w-full flex items-center gap-2">
+                    <div class="flex rounded-lg shadow-sm flex-grow">
+                        <input type="text" id="search-input" placeholder="Pesquisar em todos os campos..." class="w-full sm:w-80 block px-4 py-2 text-gray-700 bg-gray-50 border border-gray-300 rounded-l-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <button id="search-button" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-r-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50" title="Pesquisar">
+                            <svg id="search-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
+                            <svg id="search-spinner" class="hidden animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Display de Camada Ativa -->
+        <div id="active-layer-display" class="w-full text-center py-2 font-semibold text-gray-700 bg-gray-100 rounded-md">
+            Camadas Ativas: Nenhuma
+        </div>
+
+        <!-- Container para Resultados da Pesquisa -->
+        <div id="search-results-container" class="hidden w-full bg-white rounded-lg border border-gray-200 shadow-sm mt-4 p-4 space-y-3">
+            <div class="flex justify-between items-center border-b pb-2">
+                 <h3 id="search-results-title" class="text-lg font-semibold text-gray-800">Resultados da Pesquisa</h3>
+                 <div class="flex items-center gap-4">
+                     <button id="abandon-search-button" class="text-gray-500 hover:text-red-600" title="Abandonar Pesquisa">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                     </button>
+                 </div>
+            </div>
+            <div id="search-results-list">
+                <!-- Resultados serão inseridos aqui -->
+            </div>
+        </div>
+
+        <!-- Container do Mapa -->
+        <div id="map" class="w-full rounded-lg border-2 border-gray-200 shadow-inner relative">
+             <div id="loading-overlay" class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-[1000]">
+                <div class="text-center">
+                    <svg class="animate-spin h-8 w-8 text-blue-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p id="status" class="text-gray-600 mt-2 font-semibold">Carregando dados...</p>
+                </div>
+            </div>
+             <!-- Controles Customizados -->
+            <div class="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-2">
+                <!-- Controle de Camadas -->
+                <div id="custom-layers-control" class="flex items-start">
+                    <button id="toggle-layers-btn" class="bg-white p-2 rounded-md shadow-lg hover:bg-gray-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-gray-700"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                    </button>
+                    <div id="layers-panel" class="hidden bg-white rounded-md shadow-lg ml-2 max-w-xs">
+                        <div class="flex justify-between items-center p-2 border-b">
+                            <h3 class="font-bold">Camadas</h3>
+                            <button id="close-layers-btn" class="text-2xl font-bold text-gray-500 hover:text-red-600">&times;</button>
+                        </div>
+                        <div id="layers-list" class="p-2 space-y-1"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Container para Feições Selecionadas -->
+    <div id="selected-features-container" class="hidden w-full max-w-7xl bg-white rounded-2xl shadow-xl p-6">
+        <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">Feições Selecionadas</h2>
+        <div id="selected-features-list">
+            <!-- Itens selecionados serão inseridos aqui -->
+        </div>
+    </div>
+
+    <!-- Tabela de Informações -->
+    <div id="info-table-container" class="w-full max-w-7xl bg-white rounded-2xl shadow-xl p-6 hidden">
+        <div class="flex flex-wrap justify-between items-center gap-4 mb-4 border-b pb-2">
+            <h2 id="info-table-title" class="text-2xl font-bold text-gray-700">Propriedades do Elemento Selecionado</h2>
+            <div class="flex gap-2">
+                <button id="export-csv-button" class="px-4 py-1.5 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 text-sm flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                    Exportar CSV
+                </button>
+                <button id="export-kml-button" class="px-4 py-1.5 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 text-sm flex items-center gap-2">
+                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" /></svg>
+                    Exportar KML
+                </button>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Propriedade</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                    </tr>
+                </thead>
+                <tbody id="info-table-body" class="bg-white divide-y divide-gray-200">
+                     <tr><td colspan="2" class="px-6 py-4 text-center text-gray-500">Clique em um elemento no mapa para ver suas informações.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <!-- Container para Detalhes Individuais -->
+        <div id="individual-details-container" class="hidden mt-4"></div>
+    </div>
+
+    <!-- Rodapé com fontes e créditos -->
+    <footer class="w-full max-w-7xl mt-4 text-center text-gray-600">
+        <div class="bg-white rounded-2xl shadow-xl p-4">
+            <h3 class="font-semibold mb-3 text-lg">Fonte dos Dados</h3>
+            <div class="flex justify-center items-center gap-8 border-t pt-4 mt-4">
+                <img src="https://raw.githubusercontent.com/marciodemelosilvageo-glitch/GeoCode/main/logo/IBGE_logo.png" alt="Logo IBGE" class="h-8">
+                <img src="https://raw.githubusercontent.com/marciodemelosilvageo-glitch/GeoCode/main/logo/image-removebg-preview.png" alt="Logo SSP" class="h-12">
+                <img src="https://raw.githubusercontent.com/marciodemelosilvageo-glitch/GeoCode/main/logo/image-Photoroom.png" alt="Logo Gerência de Dados Cartográficos" class="h-14">
+            </div>
+        </div>
+    </footer>
+
+    <!-- Modal de Exportação -->
+    <div id="export-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+        <div class="relative mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">Opções de Exportação</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-500">
+                        Você selecionou múltiplos itens. Como deseja exportar?
+                    </p>
+                </div>
+                <div class="items-center px-4 py-3 space-y-2">
+                    <button id="export-summary-btn" class="w-full px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                        Exportar Resumo Agregado
+                    </button>
+                    <button id="export-individuals-btn" class="w-full px-4 py-2 bg-green-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-300">
+                        Exportar Itens Individuais
+                    </button>
+                    <button id="cancel-export-btn" class="w-full px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script>
+        const statusElement = document.getElementById('status');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const tableContainer = document.getElementById('info-table-container');
+        const tableTitle = document.getElementById('info-table-title');
+        const tableBody = document.getElementById('info-table-body');
+        const searchInput = document.getElementById('search-input');
+        const searchButton = document.getElementById('search-button');
+        const searchIcon = document.getElementById('search-icon');
+        const searchSpinner = document.getElementById('search-spinner');
+        const activeLayerDisplay = document.getElementById('active-layer-display');
+        const exportCsvButton = document.getElementById('export-csv-button');
+        const exportKmlButton = document.getElementById('export-kml-button');
+        
+        const searchResultsContainer = document.getElementById('search-results-container');
+        const searchResultsTitle = document.getElementById('search-results-title');
+        const searchResultsList = document.getElementById('search-results-list');
+        const abandonSearchButton = document.getElementById('abandon-search-button');
+        const searchActiveLayersToggle = document.getElementById('search-active-layers-toggle');
+        
+        const selectedFeaturesContainer = document.getElementById('selected-features-container');
+        const selectedFeaturesList = document.getElementById('selected-features-list');
+        const individualDetailsContainer = document.getElementById('individual-details-container');
+
+        const toggleLayersBtn = document.getElementById('toggle-layers-btn');
+        const layersPanel = document.getElementById('layers-panel');
+        const closeLayersBtn = document.getElementById('close-layers-btn');
+        const layersList = document.getElementById('layers-list');
+        
+        let selectedLayers = new Set();
+        let currentGroupedResults = {};
+        const selectedStyle = { weight: 4, color: '#FFD700', dashArray: '', fillOpacity: 0.7 };
+        let exportFileType = null;
+
+        const propertyNames = {
+            'CD_SETOR': 'Geocódigo de Setor Censitário', 'SITUACAO': 'Situação do Setor Censitário', 'CD_SIT': 'Situação detalhada do Setor Censitário', 'CD_TIPO': 'Tipo do Setor Censitário', 'AREA_KM2': 'Área (km²)', 'CD_REGIAO': 'Código da Grande Região', 'NM_REGIAO': 'Nome da Grande Região', 'CD_UF': 'Código da UF', 'NM_UF': 'Nome da UF', 'CD_MUN': 'Código do Município', 'NM_MUN': 'Nome do Município', 'CD_DIST': 'Código do Distrito', 'NM_DIST': 'Nome do Distrito', 'CD_SUBDIST': 'Código do Subdistrito', 'NM_SUBDIST': 'Nome do Subdistrito', 'CD_BAIRRO': 'Código do Bairro', 'NM_BAIRRO': 'Nome do Bairro', 'CD_NU': 'Código do Núcleo Urbano', 'NM_NU': 'Nome do Núcleo Urbano', 'CD_FCU': 'Código da Favela ou Comunidade Urbana', 'NM_FCU': 'Nome da Favela ou Comunidade Urbana', 'CD_AGLOM': 'Código do Aglomerado', 'NM_AGLOM': 'Nome do Aglomerado', 'CD_RGINT': 'Código da Região Geográfica Intermediária', 'NM_RGINT': 'Nome da Região Geográfica Intermediária', 'CD_RGI': 'Código da Região Geográfica Imediata', 'NM_RGI': 'Nome da Região Geográfica Imediata', 'CD_CONCURB': 'Código da Concentração Urbana', 'NM_CONCURB': 'Nome da Concentração Urbana',
+            'Total de pessoas': 'Total de pessoas', 'Total de Domicílios': 'Total de Domicílios', 'Total de Domicílios Particulares': 'Total de Domicílios Particulares', 'Total de Domicílios Coletivos': 'Total de Domicílios Coletivos', 'Média de moradores em Domicílios Particulares Ocupados': 'Média de moradores em Domicílios Particulares Ocupados', 'Percentual de Domicílios Particulares Ocupados Imputados': 'Percentual de Domicílios Particulares Ocupados Imputados', 'Total de Domicílios Particulares Ocupados': 'Total de Domicílios Particulares Ocupados', 'nome': 'Nome'
+        };
+        
+        function getSectorsPopulationColor(d) {
+            return d > 2000 ? '#B10026' :
+                   d > 1500 ? '#E31A1C' :
+                   d > 1000 ? '#FC4E2A' :
+                   d > 750  ? '#FD8D3C' :
+                   d > 500  ? '#FEB24C' :
+                   d > 250  ? '#FED976' :
+                   d > 100  ? '#FFFFB2' :
+                              '#FFFFE5';
+        }
+        
+        function getAreaDevColor(d) {
+            return d > 389168 ? '#800026' :
+                   d > 218862 ? '#B10026' :
+                   d > 170528 ? '#E31A1C' :
+                   d > 127442 ? '#FC4E2A' :
+                   d > 112096 ? '#FD8D3C' :
+                   d > 88281  ? '#FEB24C' :
+                              '#FFFFE5';
+        }
+        
+        function getGeneralPopulationColor(d) {
+             return d > 200000 ? '#800026' :
+                    d > 100000 ? '#BD0026' :
+                    d > 50000  ? '#E31A1C' :
+                    d > 20000  ? '#FC4E2A' :
+                    d > 10000  ? '#FD8D3C' :
+                    d > 5000   ? '#FEB24C' :
+                    d > 1000   ? '#FED976' :
+                               '#FFEDA0';
+        }
+
+        const thematicStyleGeneral = (feature) => ({ 
+            fillColor: getGeneralPopulationColor(feature.properties['Total de pessoas'] || 0), 
+            weight: 1, opacity: 1, color: 'black', fillOpacity: 0.7 
+        });
+        
+        const thematicStyleSectors = (feature) => ({ 
+            fillColor: getSectorsPopulationColor(feature.properties['Total de pessoas'] || 0), 
+            weight: 1, opacity: 1, color: 'black', fillOpacity: 0.7 
+        });
+        
+        const thematicStyleAreaDev = (feature) => ({ 
+            fillColor: getAreaDevColor(feature.properties['Total de pessoas'] || 0), 
+            weight: 1, opacity: 1, color: 'black', fillOpacity: 0.7 
+        });
+
+        // Define quais camadas usarão qual estilo temático
+        const layerStyles = {
+            "Aglomerado": thematicStyleGeneral,
+            "Area de Desenvolvimentos": thematicStyleAreaDev,
+            "Bairros": thematicStyleSectors,
+            "Concentracao Urbana": thematicStyleGeneral,
+            "Distrito": thematicStyleGeneral,
+            "Favela ou Comunidades Urbana": thematicStyleSectors,
+            "Municipio": thematicStyleGeneral,
+            "Nucleo Urbano": thematicStyleSectors,
+            "Piaui": thematicStyleGeneral,
+            "Regiao Geografica Imediata": thematicStyleGeneral,
+            "Regiao Geografica Intermediaria": thematicStyleGeneral,
+            "Setores Censitarios": thematicStyleSectors,
+            "Situacao Nivel Bairros": thematicStyleSectors,
+            "Situacao Nivel Estado": thematicStyleGeneral,
+            "Situacao Nivel Muni": thematicStyleGeneral,
+            "Subdistrito": thematicStyleGeneral,
+            "Tipo Nivel Estado": thematicStyleGeneral,
+            "Tipo Nivel Muni": thematicStyleGeneral
+        };
+
+        const dataSources = [
+            { name: "Aglomerado", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/AGLOMERADO.geojson', popupProperty: 'NM_AGLOM' },
+            { name: "Area de Desenvolvimentos", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/AREA%20DE%20DESENVOLVIMENTOS.geojson', popupProperty: 'nome'},
+            { name: "Bairros", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/BAIRROS.geojson', popupProperty: 'NM_BAIRRO'},
+            { name: "Concentracao Urbana", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/CONCENTRACAO%20URBANA.geojson', popupProperty: 'NM_CONCURB' },
+            { name: "Distrito", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/DISTRITO.geojson', popupProperty: 'NM_DIST'},
+            { name: "Favela ou Comunidades Urbana", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/FAVELA%20OU%20COMUNIDADES%20URBANA.geojson', popupProperty: 'NM_FCU' },
+            { name: "Municipio", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/MUNICIPIO.geojson', popupProperty: 'NM_MUN'},
+            { name: "Nucleo Urbano", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/NUCLEO%20URBANO.geojson', popupProperty: 'NM_NU'},
+            { name: "Piaui", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/PIAUI.geojson', popupProperty: 'NM_UF'},
+            { name: "Regiao Geografica Imediata", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/REGIAO%20GEOGRAFICA%20IMEDIATA.geojson', popupProperty: 'NM_RGI' },
+            { name: "Regiao Geografica Intermediaria", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/REGIAO%20GEOGRAFICA%20INTERMEDIARIA.geojson', popupProperty: 'NM_RGINT' },
+            { name: "Setores Censitarios", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/SETORES%20CENSITARIOS.geojson', popupProperty: 'CD_SETOR' },
+            { name: "Situacao Nivel Bairros", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/SITUACAO%20NIVEL%20BAIRROS.geojson', popupProperty: 'NM_SIT' },
+            { name: "Situacao Nivel Estado", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/SITUACAO%20NIVEL%20ESTADO.geojson', popupProperty: 'NM_SIT' },
+            { name: "Situacao Nivel Muni", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/SITUACAO%20NIVEL%20MUNI.geojson', popupProperty: 'NM_SIT' },
+            { name: "Subdistrito", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/SUBDISTRITO.geojson', popupProperty: 'NM_SUBDIST'},
+            { name: "Tipo Nivel Estado", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/TIPO%20NIVEL%20ESTADO.geojson', popupProperty: 'NM_TIPO' },
+            { name: "Tipo Nivel Muni", url: 'https://media.githubusercontent.com/media/marciodemelosilvageo-glitch/GeoCode/main/geojson/TIPO%20NIVEL%20MUNI.geojson', popupProperty: 'NM_TIPO' }
+        ].map(source => ({ ...source, style: layerStyles[source.name] || thematicStyleGeneral })); // Aplica o estilo
+        
+        function updateInfoPanel() {
+            const count = selectedLayers.size;
+            tableBody.innerHTML = '';
+            individualDetailsContainer.innerHTML = '';
+            individualDetailsContainer.classList.add('hidden');
+
+            if (count === 0) {
+                tableContainer.classList.add('hidden');
+                return;
+            }
+
+            tableContainer.classList.remove('hidden');
+
+            if (count === 1) {
+                tableTitle.textContent = 'Propriedades do Elemento Selecionado';
+                const singleLayer = Array.from(selectedLayers)[0];
+                const properties = singleLayer.feature.properties;
+                for (const key in properties) {
+                    if (key.toLowerCase() === 'fid' || key.toLowerCase() === 'id') continue;
+                    const displayName = propertyNames[key] || key;
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50';
+                    row.innerHTML = `<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${displayName}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${properties[key]}</td>`;
+                    tableBody.appendChild(row);
+                }
+            } else {
+                tableTitle.textContent = `Resumo da Seleção (${count} itens)`;
+                
+                let sumData = {
+                    'Total de pessoas': 0,
+                    'Total de Domicílios': 0,
+                    'Total de Domicílios Particulares': 0,
+                    'Total de Domicílios Coletivos': 0,
+                    'Total de Domicílios Particulares Ocupados': 0
+                };
+                let weightedSumV0005 = 0, weightedSumV0006 = 0;
+
+                selectedLayers.forEach(layer => {
+                    const props = layer.feature.properties;
+                    for (const key in sumData) {
+                        sumData[key] += parseFloat(props[key]) || 0;
+                    }
+                    weightedSumV0005 += (parseFloat(props['Média de moradores em Domicílios Particulares Ocupados']) || 0) * (parseFloat(props['Total de Domicílios Particulares Ocupados']) || 0);
+                    weightedSumV0006 += (parseFloat(props['Percentual de Domicílios Particulares Ocupados Imputados']) || 0) * (parseFloat(props['Total de Domicílios Particulares Ocupados']) || 0);
+                });
+                
+                const totalOccupied = sumData['Total de Domicílios Particulares Ocupados'];
+                const averageV0005 = totalOccupied > 0 ? (weightedSumV0005 / totalOccupied).toFixed(2) : 'N/A';
+                const averageV0006 = totalOccupied > 0 ? (weightedSumV0006 / totalOccupied).toFixed(2) : 'N/A';
+                
+                const summaryData = { ...sumData };
+                summaryData['Média de moradores em Domicílios Particulares Ocupados'] = averageV0005;
+                summaryData['Percentual de Domicílios Particulares Ocupados Imputados'] = averageV0006 + '%';
+                
+                for (const key in summaryData) {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50';
+                    row.innerHTML = `<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">${key}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${typeof summaryData[key] === 'number' ? summaryData[key].toLocaleString('pt-BR') : summaryData[key]}</td>`;
+                    tableBody.appendChild(row);
+                }
+
+                individualDetailsContainer.classList.remove('hidden');
+                const detailsHeader = document.createElement('h3');
+                detailsHeader.className = 'text-xl font-bold text-gray-700 my-4 border-t pt-4';
+                detailsHeader.textContent = 'Detalhes Individuais';
+                individualDetailsContainer.appendChild(detailsHeader);
+                
+                selectedLayers.forEach(layer => {
+                    const properties = layer.feature.properties;
+                    const identifier = properties['Nome do Município'] || properties['Geocódigo de Setor Censitário'] || 'Item Selecionado';
+                    
+                    const groupWrapper = document.createElement('div');
+                    groupWrapper.className = 'border-b last:border-b-0';
+
+                    const groupHeader = document.createElement('div');
+                    groupHeader.className = 'p-3 flex justify-between items-center font-bold bg-gray-100 text-gray-700 cursor-pointer hover:bg-gray-200';
+                    groupHeader.innerHTML = `
+                        <div class="flex items-center">
+                            <span>${identifier}</span>
+                            <svg class="ml-2 w-5 h-5 transition-transform transform" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="flex gap-2">
+                             <button class="export-individual-csv-button px-2 py-0.5 bg-green-500 text-white font-semibold rounded hover:bg-green-600 text-xs" data-layer-id="${layer._leaflet_id}">CSV</button>
+                            <button class="export-individual-kml-button px-2 py-0.5 bg-blue-500 text-white font-semibold rounded hover:bg-blue-600 text-xs" data-layer-id="${layer._leaflet_id}">KML</button>
+                        </div>
+                    `;
+                    
+                    const groupContent = document.createElement('div');
+                    groupContent.className = 'hidden p-4';
+                    
+                    let tableHTML = '<table class="min-w-full text-sm">';
+                    for (const key in properties) {
+                         if (key.toLowerCase() === 'fid' || key.toLowerCase() === 'id') continue;
+                         const displayName = key;
+                         tableHTML += `<tr class="border-t"><td class="py-1 pr-2 font-medium">${displayName}</td><td class="py-1">${properties[key]}</td></tr>`;
+                    }
+                    tableHTML += '</table>';
+                    groupContent.innerHTML = tableHTML;
+
+                    groupHeader.addEventListener('click', (e) => {
+                        if (!e.target.closest('button')) {
+                            groupContent.classList.toggle('hidden');
+                            groupHeader.querySelector('svg').classList.toggle('rotate-180');
+                        }
+                    });
+
+                    groupWrapper.appendChild(groupHeader);
+                    groupWrapper.appendChild(groupContent);
+                    individualDetailsContainer.appendChild(groupWrapper);
+                });
+            }
+        }
+
+
+        function updateSelectedFeaturesList() {
+            selectedFeaturesList.innerHTML = '';
+            if (selectedLayers.size === 0) {
+                selectedFeaturesContainer.classList.add('hidden');
+                return;
+            }
+
+            selectedLayers.forEach(layer => {
+                const properties = layer.feature.properties;
+                const identifier = properties['Nome do Município'] || properties['Geocódigo de Setor Censitário'] || 'Item Selecionado';
+                const sourceName = layer.customSourceName || 'Camada';
+
+                const itemHTML = `
+                    <div class="flex justify-between items-center p-2 border-b last:border-b-0" data-layer-id="${layer._leaflet_id}">
+                        <div>
+                            <p class="font-semibold text-sm">${identifier}</p>
+                            <p class="text-xs text-gray-500">${sourceName}</p>
+                        </div>
+                        <div class="flex items-center">
+                            <button class="zoom-to-feature p-1 text-blue-500 hover:text-blue-700" title="Zoom na feição">
+                                <svg class="w-5 h-5 pointer-events-none" fill="currentColor" viewBox="0 0 20 20"><path d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"></path><path d="M8 4.5a.5.5 0 01.5.5v2h2a.5.5 0 010 1h-2v2a.5.5 0 01-1 0v-2h-2a.5.5 0 010-1h2v-2a.5.5 0 01.5-.5z"></path></svg>
+                            </button>
+                            <button class="remove-from-selection p-1 text-red-500 hover:text-red-700" title="Remover da seleção">
+                                <svg class="w-5 h-5 pointer-events-none" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                selectedFeaturesList.innerHTML += itemHTML;
+            });
+
+            selectedFeaturesContainer.classList.remove('hidden');
+        }
+        
+        function updateActiveLayersDisplay() {
+            const activeLayers = [];
+            for (const i in loadedLayers) {
+                if (map.hasLayer(loadedLayers[i])) {
+                    activeLayers.push(i);
+                }
+            }
+            activeLayerDisplay.innerHTML = activeLayers.length > 0 ? `<strong>Camadas Ativas:</strong> ${activeLayers.join(', ')}` : '<strong>Camadas Ativas:</strong> Nenhuma';
+        }
+
+        function exportSelectionToCSV(filename, layers) {
+            const results = layers || Array.from(selectedLayers);
+            if (results.length === 0) { alert("Não há dados selecionados para exportar."); return; }
+            
+            const allKeys = new Set();
+            results.forEach(layer => {
+                Object.keys(layer.feature.properties).forEach(key => {
+                    if (key.toLowerCase() !== 'fid' && key.toLowerCase() !== 'id') allKeys.add(key);
+                });
+            });
+
+            const sortedKeys = Array.from(allKeys).sort();
+            const headers = sortedKeys.map(key => `"${(propertyNames[key] || key).replace(/"/g, '""')}"`);
+            let csvContent = headers.join(',') + '\r\n';
+
+            results.forEach(layer => {
+                const row = sortedKeys.map(key => {
+                    const value = layer.feature.properties[key];
+                    const formattedValue = value !== null && value !== undefined ? String(value) : '';
+                    return `"${formattedValue.replace(/"/g, '""')}"`;
+                });
+                csvContent += row.join(',') + '\r\n';
+            });
+            
+            downloadFile(filename, csvContent, 'text/csv;charset=utf-8');
+        }
+
+        function exportSelectionToKML(filename, layers) {
+            const results = layers || Array.from(selectedLayers);
+            if (results.length === 0) { alert("Nenhum elemento selecionado para exportar."); return; }
+
+            let placemarks = '';
+            results.forEach(layer => {
+                placemarks += featureToKMLPlacemark(layer.feature) + '\n';
+            });
+
+            const fullKML = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n${placemarks}  </Document>\n</kml>`;
+            downloadFile(filename, fullKML, 'application/vnd.google-earth.kml+xml');
+        }
+
+        function featureToKMLPlacemark(feature) {
+            const properties = feature.properties;
+            const geometry = feature.geometry;
+            const placemarkName = properties['Nome do Município'] || properties['Nome da UF'] || properties['Geocódigo de Setor Censitário'] || 'Elemento Exportado';
+            let placemark = `    <Placemark>\n      <name>${placemarkName}</name>\n`;
+            placemark += '      <ExtendedData>\n';
+            for (const key in properties) {
+                if (key.toLowerCase() === 'fid' || key.toLowerCase() !== 'id') continue;
+                const displayName = propertyNames[key] || key;
+                const value = properties[key] !== null && properties[key] !== undefined ? properties[key] : '';
+                placemark += `        <Data name="${displayName}"><value>${value}</value></Data>\n`;
+            }
+            placemark += '      </ExtendedData>\n';
+            const coordsToString = (coords) => coords.map(c => `${c[0]},${c[1]},0`).join(' ');
+            if (geometry.type === 'Polygon') {
+                placemark += `      <Polygon>\n        <outerBoundaryIs>\n          <LinearRing>\n            <coordinates>${coordsToString(geometry.coordinates[0])}</coordinates>\n          </LinearRing>\n        </outerBoundaryIs>\n      </Polygon>\n`;
+            } else if (geometry.type === 'MultiPolygon') {
+                placemark += '      <MultiGeometry>\n';
+                geometry.coordinates.forEach(polygonCoords => {
+                    placemark += `        <Polygon>\n          <outerBoundaryIs>\n            <LinearRing>\n              <coordinates>${coordsToString(polygonCoords[0])}</coordinates>\n            </LinearRing>\n          </outerBoundaryIs>\n        </Polygon>\n`;
+                });
+                placemark += '      </MultiGeometry>\n';
+            }
+            placemark += '    </Placemark>';
+            return placemark;
+        }
+
+        function downloadFile(filename, content, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+        }
+
+        const map = L.map('map').setView([-15.78, -47.92], 4);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+
+        let loadedLayers = {};
+
+        async function loadLayer(source) {
+            try {
+                statusElement.textContent = `Carregando: ${source.name}...`;
+                const response = await fetch(source.url);
+                if (!response.ok) throw new Error(`Falha ao buscar ${source.name}: ${response.statusText}`);
+                const data = await response.json();
+                const geojsonLayer = L.geoJSON(data, {
+                    style: source.style,
+                    onEachFeature: (feature, layer) => {
+                        layer.customSourceName = source.name;
+                        layer.defaultStyle = (typeof source.style === 'function') ? source.style(feature) : source.style;
+                        const propValue = feature.properties ? feature.properties[source.popupProperty] : null;
+                        if (propValue) {
+                            const propName = propertyNames[source.popupProperty] || source.popupProperty;
+                            layer.bindPopup(`<strong>${source.name}</strong><br><em>${propName}:</em> ${propValue}`);
+                        }
+                        layer.on('click', (e) => {
+                            const isCtrlPressed = e.originalEvent ? (e.originalEvent.ctrlKey || e.originalEvent.metaKey) : (e.ctrlKey || e.metaKey); 
+                            
+                            if (!isCtrlPressed) {
+                                selectedLayers.forEach(l => {
+                                    if(l !== layer) l.setStyle(l.defaultStyle);
+                                });
+                                selectedLayers.clear();
+                            }
+
+                            if (selectedLayers.has(layer)) {
+                                layer.setStyle(layer.defaultStyle);
+                                selectedLayers.delete(layer);
+                            } else {
+                                layer.setStyle(selectedStyle);
+                                selectedLayers.add(layer);
+                            }
+                            
+                            updateInfoPanel();
+                            updateSelectedFeaturesList();
+
+                            if (e.originalEvent) {
+                                L.DomEvent.stopPropagation(e);
+                            }
+                        });
+                    }
+                });
+                loadedLayers[source.name] = geojsonLayer;
+            } catch (error) {
+                console.error(`Erro ao carregar ${source.name}:`, error);
+                statusElement.textContent = `Erro ao carregar ${source.name}.`;
+            }
+        }
+        
+        map.on('click', () => {
+            selectedLayers.forEach(l => l.setStyle(l.defaultStyle));
+            selectedLayers.clear();
+            updateInfoPanel();
+            updateSelectedFeaturesList();
+            searchResultsContainer.classList.add('hidden');
+        });
+        
+        const normalizeString = (str) => {
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        }
+        
+        const levenshteinDistance = (a, b) => {
+            if (a.length === 0) return b.length;
+            if (b.length === 0) return a.length;
+            const matrix = [];
+
+            for (let i = 0; i <= b.length; i++) {
+                matrix[i] = [i];
+            }
+
+            for (let j = 0; j <= a.length; j++) {
+                matrix[0][j] = j;
+            }
+
+            for (let i = 1; i <= b.length; i++) {
+                for (let j = 1; j <= a.length; j++) {
+                    if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(
+                            matrix[i - 1][j - 1] + 1,
+                            matrix[i][j - 1] + 1,
+                            matrix[i - 1][j] + 1
+                        );
+                    }
+                }
+            }
+
+            return matrix[b.length][a.length];
+        };
+
+        function performSearch() {
+            const searchTerm = normalizeString(searchInput.value.trim()).toLowerCase();
+            if (!searchTerm) { searchResultsContainer.classList.add('hidden'); return; }
+            
+            searchResultsList.innerHTML = '';
+            searchResultsContainer.classList.remove('hidden');
+            searchButton.disabled = true;
+            searchIcon.classList.add('hidden');
+            searchSpinner.classList.remove('hidden');
+
+            setTimeout(() => {
+                const allFoundItems = [];
+                let resultCounter = 0;
+                
+                const searchOnlyActive = searchActiveLayersToggle.checked;
+                const layersToSearch = [];
+
+                if (searchOnlyActive) {
+                     for (const name in loadedLayers) {
+                        if (map.hasLayer(loadedLayers[name])) {
+                            layersToSearch.push(loadedLayers[name]);
+                        }
+                    }
+                } else {
+                    for (const name in loadedLayers) {
+                        layersToSearch.push(loadedLayers[name]);
+                    }
+                }
+                
+                layersToSearch.forEach(mainLayer => {
+                    mainLayer.eachLayer(polygonLayer => {
+                        if (!polygonLayer.feature || !polygonLayer.feature.properties) return;
+                        const properties = polygonLayer.feature.properties;
+                        
+                        for (const key in properties) {
+                            const value = properties[key];
+                            if (value) {
+                                const normalizedValue = normalizeString(String(value)).toLowerCase();
+                                const distance = levenshteinDistance(searchTerm, normalizedValue);
+                                const threshold = searchTerm.length < 5 ? 1 : 2;
+
+                                if (normalizedValue.includes(searchTerm) || distance <= threshold) {
+                                    allFoundItems.push({
+                                        polygonLayer, 
+                                        value, 
+                                        key, 
+                                        distance: normalizedValue.includes(searchTerm) ? -1 : distance
+                                    });
+                                    resultCounter++;
+                                    break;
+                                }
+                            }
+                        }
+                    });
+                });
+                
+                allFoundItems.sort((a, b) => a.distance - b.distance);
+
+                currentGroupedResults = {};
+                allFoundItems.forEach(item => {
+                    const sourceName = item.polygonLayer.customSourceName || 'Outros';
+                    if (!currentGroupedResults[sourceName]) {
+                        currentGroupedResults[sourceName] = [];
+                    }
+                    currentGroupedResults[sourceName].push(item);
+                });
+
+
+                renderSearchResults(currentGroupedResults, resultCounter);
+
+                searchButton.disabled = false;
+                searchIcon.classList.remove('hidden');
+                searchSpinner.classList.add('hidden');
+            }, 50);
+        }
+
+        function renderSearchResults(groupedResults, totalResults) {
+            searchResultsList.innerHTML = ''; 
+            if (totalResults > 0) {
+                searchResultsTitle.textContent = `${totalResults} resultado(s) encontrado(s)`;
+                
+                const sortedGroupKeys = Object.keys(groupedResults).sort();
+
+                sortedGroupKeys.forEach(groupName => {
+                    const results = groupedResults[groupName];
+                    const groupWrapper = document.createElement('div');
+                    groupWrapper.className = 'border-b last:border-b-0';
+
+                    const groupHeader = document.createElement('div');
+                    groupHeader.className = 'p-3 flex justify-between items-center font-bold bg-gray-100 text-gray-700 cursor-pointer hover:bg-gray-200';
+                    groupHeader.innerHTML = `
+                        <div class="flex items-center">
+                            <span>${groupName} (${results.length})</span>
+                            <svg class="ml-2 w-5 h-5 transition-transform transform" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="export-group-csv-button px-2 py-0.5 bg-green-500 text-white font-semibold rounded hover:bg-green-600 text-xs" data-group-name="${groupName}">CSV</button>
+                            <button class="export-group-kml-button px-2 py-0.5 bg-blue-500 text-white font-semibold rounded hover:bg-blue-600 text-xs" data-group-name="${groupName}">KML</button>
+                        </div>
+                    `;
+                    
+                    const groupContent = document.createElement('div');
+                    groupContent.className = 'hidden';
+
+                    results.forEach(({ polygonLayer, value, key }, index) => {
+                        const uniqueId = `${groupName}-${index}`;
+                        
+                        const resultItem = document.createElement('div');
+                        resultItem.className = 'p-3 pl-6 hover:bg-blue-50 cursor-pointer border-t';
+                        resultItem.dataset.resultId = uniqueId;
+                        resultItem.innerHTML = `
+                            <p class="font-semibold text-gray-800">${String(value)}</p>
+                            <p class="text-sm text-gray-500">
+                                Encontrado em: <strong>${propertyNames[key] || key}</strong>
+                            </p>`;
+                        groupContent.appendChild(resultItem);
+                    });
+                    
+                    groupHeader.addEventListener('click', (e) => {
+                        if (e.target.tagName !== 'BUTTON') {
+                            groupContent.classList.toggle('hidden');
+                            groupHeader.querySelector('svg').classList.toggle('rotate-180');
+                        }
+                    });
+
+                    groupWrapper.appendChild(groupHeader);
+                    groupWrapper.appendChild(groupContent);
+                    searchResultsList.appendChild(groupWrapper);
+                });
+            } else {
+                searchResultsTitle.textContent = 'Nenhum resultado encontrado';
+                searchResultsList.innerHTML = `<p class="p-3 text-gray-500">Tente um valor diferente.</p>`;
+            }
+        }
+
+
+        searchButton.addEventListener('click', performSearch);
+        searchInput.addEventListener('keyup', (event) => { if (event.key === 'Enter') performSearch(); });
+        
+        searchResultsList.addEventListener('click', (event) => {
+            const targetItem = event.target.closest('[data-result-id]');
+            if (targetItem) {
+                const [groupName, index] = targetItem.dataset.resultId.split('-');
+                const result = currentGroupedResults[groupName]?.[index];
+                if(result && result.polygonLayer) {
+                    const layer = result.polygonLayer;
+                    const sourceNameToActivate = layer.customSourceName;
+
+                    for (const name in loadedLayers) {
+                        if (map.hasLayer(loadedLayers[name])) {
+                            map.removeLayer(loadedLayers[name]);
+                            document.querySelector(`[data-layer-name="${name}"]`).checked = false;
+                        }
+                    }
+                    
+                    if (loadedLayers[sourceNameToActivate]) {
+                        map.addLayer(loadedLayers[sourceNameToActivate]);
+                        document.querySelector(`[data-layer-name="${sourceNameToActivate}"]`).checked = true;
+                    }
+                    
+                    map.fitBounds(layer.getBounds().pad(0.1));
+                    layer.fire('click', { originalEvent: { ctrlKey: false, metaKey: false }});
+                }
+            }
+
+            const csvButton = event.target.closest('.export-group-csv-button');
+            if(csvButton) {
+                exportGroupToCSV(csvButton.dataset.groupName);
+            }
+            
+            const kmlButton = event.target.closest('.export-group-kml-button');
+            if(kmlButton) {
+                exportGroupToKML(kmlButton.dataset.groupName);
+            }
+        });
+
+        abandonSearchButton.addEventListener('click', () => {
+            searchResultsContainer.classList.add('hidden');
+            searchInput.value = '';
+            selectedLayers.forEach(l => l.setStyle(l.defaultStyle));
+            selectedLayers.clear();
+            updateInfoPanel();
+            updateSelectedFeaturesList();
+        });
+        
+        exportCsvButton.addEventListener('click', () => {
+            let filename = 'selecao.csv';
+            if (selectedLayers.size > 0) {
+                const firstLayer = Array.from(selectedLayers)[0];
+                const props = firstLayer.feature.properties;
+                const id = props['Geocódigo de Setor Censitário'] || props['Nome do Município'] || 'selecionado';
+                filename = `selecao_${id}.csv`;
+            }
+            exportSelectionToCSV(filename);
+        });
+
+        exportKmlButton.addEventListener('click', () => {
+            let filename = 'selecao.kml';
+            if (selectedLayers.size > 0) {
+                const firstLayer = Array.from(selectedLayers)[0];
+                const props = firstLayer.feature.properties;
+                const id = props['Geocódigo de Setor Censitário'] || props['Nome do Município'] || 'selecionado';
+                filename = `selecao_${id}.kml`;
+            }
+            exportSelectionToKML(filename);
+        });
+        
+
+        function exportGroupToCSV(groupName) {
+            const results = currentGroupedResults[groupName].map(r => r.polygonLayer);
+            if(results.length === 0) { alert("Não há resultados neste grupo para exportar."); return; }
+            
+            const allKeys = new Set();
+            results.forEach(layer => {
+                Object.keys(layer.feature.properties).forEach(key => {
+                    if (key.toLowerCase() !== 'fid' && key.toLowerCase() !== 'id') allKeys.add(key);
+                });
+            });
+
+            const sortedKeys = Array.from(allKeys).sort();
+            const headers = sortedKeys.map(key => `"${(propertyNames[key] || key).replace(/"/g, '""')}"`);
+            let csvContent = headers.join(',') + '\r\n';
+
+            results.forEach(layer => {
+                const row = sortedKeys.map(key => {
+                    const value = layer.feature.properties[key];
+                    const formattedValue = value !== null && value !== undefined ? String(value) : '';
+                    return `"${formattedValue.replace(/"/g, '""')}"`;
+                });
+                csvContent += row.join(',') + '\r\n';
+            });
+            
+            downloadFile(`resultados_${groupName}_${searchInput.value}.csv`, csvContent, 'text/csv;charset=utf-8');
+        }
+
+        function exportGroupToKML(groupName) {
+            const results = currentGroupedResults[groupName].map(r => r.polygonLayer);
+            if(results.length === 0) { alert("Não há resultados neste grupo para exportar."); return; }
+            
+            let placemarks = '';
+            results.forEach(layer => {
+                placemarks += featureToKMLPlacemark(layer.feature) + '\n';
+            });
+
+            const fullKML = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n<name>${groupName}</name>\n${placemarks}  </Document>\n</kml>`;
+            downloadFile(`resultados_${groupName}_${searchInput.value}.kml`, fullKML, 'application/vnd.google-earth.kml+xml');
+        }
+        
+        selectedFeaturesList.addEventListener('click', (e) => {
+            const target = e.target.closest('button');
+            if (!target) return;
+
+            const listItem = target.closest('[data-layer-id]');
+            const layerId = listItem.dataset.layerId;
+            let layerToActOn;
+            
+            for (const layer of selectedLayers) {
+                if (layer._leaflet_id == layerId) {
+                    layerToActOn = layer;
+                    break;
+                }
+            }
+            if (!layerToActOn) return;
+
+            if (target.classList.contains('zoom-to-feature')) {
+                map.fitBounds(layerToActOn.getBounds().pad(0.1));
+            } else if (target.classList.contains('remove-from-selection')) {
+                layerToActOn.setStyle(layerToActOn.defaultStyle);
+                selectedLayers.delete(layerToActOn);
+                updateSelectedFeaturesList();
+                updateInfoPanel();
+            }
+        });
+
+        individualDetailsContainer.addEventListener('click', (e) => {
+            const button = e.target.closest('button');
+            if (!button) return;
+
+            const layerId = button.dataset.layerId;
+            let layerToExport;
+            for (const layer of selectedLayers) {
+                if (layer._leaflet_id == layerId) {
+                    layerToExport = layer;
+                    break;
+                }
+            }
+            if (!layerToExport) return;
+
+            const props = layerToExport.feature.properties;
+            const id = props['Geocódigo de Setor Censitário'] || props['Nome do Município'] || 'selecionado';
+            
+            if (button.classList.contains('export-individual-csv-button')) {
+                exportSelectionToCSV(`propriedades_${id}.csv`, [layerToExport]);
+            } else if (button.classList.contains('export-individual-kml-button')) {
+                exportSelectionToKML(`elemento_${id}.kml`, [layerToExport]);
+            }
+        });
+        
+        // Legendas
+        const legendSectors = L.control({position: 'bottomright'});
+        legendSectors.onAdd = function (map) {
+            const div = L.DomUtil.create('div', 'info legend bg-white p-2 rounded-md shadow-md');
+            const grades = [0, 100, 250, 500, 750, 1000, 1500, 2000];
+            div.innerHTML += '<h4 class="font-bold text-center mb-1">População (Setores)</h4>';
+            for (let i = 0; i < grades.length; i++) {
+                div.innerHTML +=
+                    '<i style="background:' + getSectorsPopulationColor(grades[i] + 1) + '"></i> ' +
+                    grades[i].toLocaleString('pt-BR') + (grades[i + 1] ? '&ndash;' + grades[i + 1].toLocaleString('pt-BR') + '<br>' : '+');
+            }
+            return div;
+        };
+        legendSectors.addTo(map);
+
+        const legendAreaDev = L.control({position: 'bottomright'});
+        legendAreaDev.onAdd = function (map) {
+            const div = L.DomUtil.create('div', 'info legend bg-white p-2 rounded-md shadow-md');
+            const grades = [0, 88281, 112096, 127442, 170528, 218862, 389168];
+            div.innerHTML += '<h4 class="font-bold text-center mb-1">População (Áreas Dev.)</h4>';
+            for (let i = 0; i < grades.length; i++) {
+                div.innerHTML +=
+                    '<i style="background:' + getAreaDevColor(grades[i] + 1) + '"></i> ' +
+                    grades[i].toLocaleString('pt-BR') + (grades[i + 1] ? '&ndash;' + grades[i + 1].toLocaleString('pt-BR') + '<br>' : '+');
+            }
+            return div;
+        };
+        legendAreaDev.addTo(map);
+
+        const legendGeneral = L.control({position: 'bottomright'});
+        legendGeneral.onAdd = function (map) {
+            const div = L.DomUtil.create('div', 'info legend bg-white p-2 rounded-md shadow-md');
+            const grades = [0, 1000, 5000, 10000, 20000, 50000, 100000, 200000];
+            div.innerHTML += '<h4 class="font-bold text-center mb-1">População (Geral)</h4>';
+            for (let i = 0; i < grades.length; i++) {
+                div.innerHTML +=
+                    '<i style="background:' + getGeneralPopulationColor(grades[i] + 1) + '"></i> ' +
+                    grades[i].toLocaleString('pt-BR') + (grades[i + 1] ? '&ndash;' + grades[i + 1].toLocaleString('pt-BR') + '<br>' : '+');
+            }
+            return div;
+        };
+        legendGeneral.addTo(map);
+
+        const legendSectorsContainer = legendSectors.getContainer();
+        const legendAreaDevContainer = legendAreaDev.getContainer();
+        const legendGeneralContainer = legendGeneral.getContainer();
+        
+        legendSectorsContainer.style.display = 'none';
+        legendAreaDevContainer.style.display = 'none';
+        legendGeneralContainer.style.display = 'none';
+
+        
+        function setupCustomLayerControl() {
+            toggleLayersBtn.addEventListener('click', () => layersPanel.classList.remove('hidden'));
+            closeLayersBtn.addEventListener('click', () => layersPanel.classList.add('hidden'));
+
+            L.DomEvent.on(layersPanel, 'wheel', L.DomEvent.stopPropagation);
+            L.DomEvent.on(layersPanel, 'mousedown', L.DomEvent.stopPropagation);
+
+            dataSources.forEach(source => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = `layer-checkbox-${source.name.replace(/\s/g, '-')}`;
+                checkbox.className = 'h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500';
+                checkbox.dataset.layerName = source.name;
+                
+                const label = document.createElement('label');
+                label.htmlFor = checkbox.id;
+                label.textContent = source.name;
+                label.className = 'ml-2 block text-sm text-gray-900';
+
+                div.appendChild(checkbox);
+                div.appendChild(label);
+                layersList.appendChild(div);
+
+                checkbox.addEventListener('change', () => {
+                    const layer = loadedLayers[source.name];
+                    if (checkbox.checked) {
+                        map.addLayer(layer);
+                    } else {
+                        map.removeLayer(layer);
+                    }
+                    // CHAMA AS FUNÇÕES DE ATUALIZAÇÃO
+                    updateActiveLayersDisplay();
+                    updateLegendVisibility();
+                });
+            });
+        }
+        
+        function updateLegendVisibility() {
+            let activeLayerName = null;
+            for (const name in loadedLayers) {
+                if (map.hasLayer(loadedLayers[name])) {
+                    activeLayerName = name;
+                    break; 
+                }
+            }
+
+            legendSectorsContainer.style.display = 'none';
+            legendAreaDevContainer.style.display = 'none';
+            legendGeneralContainer.style.display = 'none';
+
+            if (activeLayerName === 'Setores Censitarios' || activeLayerName === 'Bairros' || activeLayerName === 'Favela ou Comunidades Urbana' || activeLayerName === 'Nucleo Urbano' || activeLayerName === 'Situacao Nivel Bairros') {
+                legendSectorsContainer.style.display = 'block';
+            } else if (activeLayerName === 'Area de Desenvolvimentos') {
+                legendAreaDevContainer.style.display = 'block';
+            } else if (activeLayerName) {
+                legendGeneralContainer.style.display = 'block';
+            }
+        }
+        
+        // ESTES EVENTOS NÃO SÃO MAIS NECESSÁRIOS COM O PAINEL CUSTOMIZADO
+        /*
+        map.on('overlayadd', () => {
+            updateActiveLayersDisplay();
+            updateLegendVisibility();
+        });
+        map.on('overlayremove', () => {
+            updateActiveLayersDisplay();
+            updateLegendVisibility();
+        });
+        */
+
+        async function loadAllLayers() {
+            await Promise.all(dataSources.map(source => loadLayer(source)));
+            loadingOverlay.style.display = 'none';
+            
+            setupCustomLayerControl();
+            
+            const firstLayerName = "Municipio";
+            const firstLayer = loadedLayers[firstLayerName];
+            let allBounds = L.latLngBounds([]);
+
+            if (firstLayer) {
+                 map.addLayer(firstLayer);
+                 document.querySelector(`[data-layer-name="${firstLayerName}"]`).checked = true;
+                 if (firstLayer.getBounds().isValid()){
+                    allBounds.extend(firstLayer.getBounds());
+                 }
+            } else if (Object.keys(loadedLayers).length > 0) {
+                const firstKey = Object.keys(loadedLayers)[0];
+                map.addLayer(loadedLayers[firstKey]);
+                document.querySelector(`[data-layer-name="${firstKey}"]`).checked = true;
+                if (loadedLayers[firstKey].getBounds().isValid()) {
+                    allBounds.extend(loadedLayers[firstKey].getBounds());
+                }
+            }
+            
+            // Adiciona bounds de todas as camadas para garantir que tudo apareça
+            for (const layerName in loadedLayers) {
+                if (loadedLayers[layerName].getBounds().isValid()) {
+                    allBounds.extend(loadedLayers[layerName].getBounds());
+                }
+            }
+
+            if (allBounds.isValid()) {
+                map.fitBounds(allBounds);
+            }
+
+            updateActiveLayersDisplay();
+            updateLegendVisibility();
+        }
+        
+        loadAllLayers();
+
+    </script>
+</body>
+</html>
+
+
